@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Play chess against AI with modern features including move history, timer, and difficulty levels">
+    <title>Modern Chess vs AI | Interactive Chess Game</title>
+    
+    <link rel="stylesheet"
+      href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css"
+      integrity="sha384-q94+BZtLrkL1/ohfjR8c6L+A6qzNH9R2hBLwyoAfu3i/WCvQjzL2RQJ3uNHDISdU"
+      crossorigin="anonymous">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header>
+        <h1>🏆 Modern Chess vs AI</h1>
+        <div class="game-controls">
+            <select id="aiEngineSelect">
+                <option value="master" selected>🧠 Chess Master AI</option>
+                <option value="adaptive">🎯 Adaptive AI</option>
+                <option value="creative">🎨 Creative AI</option>
+                <option value="tactical">⚔️ Tactical AI</option>
+            </select>
+            <select id="difficultySelect">
+                <option value="1">Easy</option>
+                <option value="2" selected>Medium</option>
+                <option value="3">Hard</option>
+                <option value="4">Expert</option>
+            </select>
+            <button id="newGameBtn" class="btn primary">New Game</button>
+            <button id="undoBtn" class="btn secondary">Undo Move</button>
+            <button id="aiMoveBtn" class="btn secondary">🤖 AI Move</button>
+            <button id="hintBtn" class="btn secondary">Hint</button>
+        </div>
+        <div id="engineStatus" class="engine-status">AI: Chess Master AI</div>
+    </header>
+
+    <main class="game-container">
+        <div class="left-panel">
+            <div class="game-info">
+                <div class="status-section">
+                    <div class="status" id="status">White to move</div>
+                    <div class="timer-section">
+                        <div class="timer white-timer">
+                            <span class="timer-label">White</span>
+                            <span id="whiteTimer" class="timer-display">10:00</span>
+                        </div>
+                        <div class="timer black-timer">
+                            <span class="timer-label">Black (AI)</span>
+                            <span id="blackTimer" class="timer-display">10:00</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="score-section">
+                    <div class="score">
+                        <span>Score: </span>
+                        <span id="whiteScore">0</span> - <span id="blackScore">0</span>
+                    </div>
+                    <div class="captured-pieces">
+                        <div class="captured white-captured" id="whiteCaptured"></div>
+                        <div class="captured black-captured" id="blackCaptured"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="board-container">
+            <div id="board"></div>
+            <div class="board-controls">
+                <button id="flipBtn" class="btn secondary">Flip Board</button>
+                <button id="soundToggle" class="btn secondary">🔊 Sound ON</button>
+            </div>
+        </div>
+
+        <div class="right-panel">
+            <div class="move-history">
+                <h3>Move History</h3>
+                <div id="moveList" class="move-list"></div>
+            </div>
+            
+            <div class="game-analysis">
+                <h3>Game Analysis</h3>
+                <div id="evaluation" class="evaluation">Even position</div>
+                <div id="bestMove" class="best-move"></div>
+            </div>
+        </div>
+    </main>
+
+    <div id="gameOverModal" class="modal hidden">
+        <div class="modal-content">
+            <h2 id="gameResult"></h2>
+            <p id="gameResultMessage"></p>
+            <div class="modal-buttons">
+                <button id="newGameModalBtn" class="btn primary">New Game</button>
+                <button id="closeModalBtn" class="btn secondary">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+    <script src="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
