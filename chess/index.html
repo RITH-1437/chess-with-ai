@@ -14,31 +14,34 @@
     integrity="sha384-q94+BZtLrkL1/ohfjR8c6L+A6qzNH9R2hBLwyoAfu3i/WCvQjzL2RQJ3uNHDISdU"
     crossorigin="anonymous"
   >
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <header class="app-header">
     <div class="title-block">
       <p class="eyebrow">Chess With AI</p>
-      <h1>Play White against a local chess engine</h1>
+      <h1>Chess With AI</h1>
     </div>
 
     <div class="game-controls" aria-label="Game controls">
       <label class="control-field" for="aiEngineSelect">
         <span>AI style</span>
         <select id="aiEngineSelect">
-          <option value="balanced" selected>Balanced</option>
-          <option value="tactical">Tactical</option>
-          <option value="defensive">Defensive</option>
+          <option value="master" selected>Master AI</option>
+          <option value="adaptive">Adaptive AI</option>
+          <option value="creative">Creative AI</option>
+          <option value="tactical">Tactical AI</option>
         </select>
       </label>
 
       <label class="control-field" for="difficultySelect">
         <span>Difficulty</span>
         <select id="difficultySelect">
-          <option value="easy">Easy</option>
-          <option value="medium" selected>Medium</option>
-          <option value="hard">Hard</option>
+          <option value="1">Easy</option>
+          <option value="2" selected>Medium</option>
+          <option value="3">Hard</option>
+          <option value="4">Expert</option>
         </select>
       </label>
 
@@ -53,58 +56,93 @@
     </div>
   </header>
 
-  <main class="game-shell">
-    <section class="side-panel status-panel" aria-label="Game status">
-      <div id="status" class="status" role="status" aria-live="polite">White to move</div>
-
-      <div class="timer-grid">
-        <div class="timer active" data-timer="white">
-          <span class="timer-label">White</span>
-          <span id="whiteTimer" class="timer-display">10:00</span>
+  <main class="game-layout">
+    <section class="board-section" aria-label="Chess board">
+      <div class="board-panel">
+        <div class="board-frame">
+          <div id="board"></div>
         </div>
-        <div class="timer" data-timer="black">
-          <span class="timer-label">Black AI</span>
-          <span id="blackTimer" class="timer-display">10:00</span>
+        <div class="board-controls">
+          <button id="flipBtn" class="btn" type="button">Flip Board</button>
+          <button id="soundToggle" class="btn" type="button">Sound On</button>
         </div>
-      </div>
-
-      <div class="score-card">
-        <span>Score</span>
-        <strong><span id="whiteScore">0</span> - <span id="blackScore">0</span></strong>
-      </div>
-
-      <div class="captured-group">
-        <p>Captured white pieces</p>
-        <div id="whiteCaptured" class="captured-pieces" aria-label="Captured white pieces"></div>
-      </div>
-
-      <div class="captured-group">
-        <p>Captured black pieces</p>
-        <div id="blackCaptured" class="captured-pieces" aria-label="Captured black pieces"></div>
       </div>
     </section>
 
-    <section class="board-panel" aria-label="Chess board">
-      <div class="board-frame">
-        <div id="board"></div>
+    <aside class="sidebar" aria-label="Game panel">
+      <div class="sidebar-tabs">
+        <button id="tabGame" class="btn active" type="button">Game</button>
+        <button id="tabAnalysis" class="btn" type="button">Analysis</button>
       </div>
-      <div class="board-controls">
-        <button id="flipBtn" class="btn" type="button">Flip Board</button>
-        <button id="soundToggle" class="btn" type="button">Sound On</button>
+
+      <div id="gamePanel">
+        <section class="player-card">
+          <div>
+            <span class="card-kicker">Current turn</span>
+            <div id="status" class="status" role="status" aria-live="polite">White to move</div>
+          </div>
+          <div class="score-card">
+            <span>Score</span>
+            <strong><span id="whiteScore">0</span> - <span id="blackScore">0</span></strong>
+          </div>
+        </section>
+
+        <section class="timer-card" aria-label="Timers">
+          <h2>Timers</h2>
+          <div class="timer-grid">
+            <div class="timer white-timer active" data-timer="white">
+              <span class="timer-label">White</span>
+              <span id="whiteTimer" class="timer-display">10:00</span>
+            </div>
+            <div class="timer black-timer" data-timer="black">
+              <span class="timer-label">Black AI</span>
+              <span id="blackTimer" class="timer-display">10:00</span>
+            </div>
+          </div>
+        </section>
+
+        <section class="captured-card">
+          <h2>Captured Pieces</h2>
+          <div class="captured-group">
+            <p>White pieces</p>
+            <div id="whiteCaptured" class="captured-pieces" aria-label="Captured white pieces"></div>
+          </div>
+          <div class="captured-group">
+            <p>Black pieces</p>
+            <div id="blackCaptured" class="captured-pieces" aria-label="Captured black pieces"></div>
+          </div>
+        </section>
+
+        <section class="history-card">
+          <h2>Move History</h2>
+          <div id="moveList" class="move-list" aria-live="polite"></div>
+        </section>
+
+        <section class="status-card">
+          <h2>Game Status</h2>
+          <div id="evaluation" class="evaluation">Even position</div>
+          <div id="bestMove" class="best-move" aria-live="polite"></div>
+        </section>
       </div>
-    </section>
 
-    <aside class="side-panel analysis-panel" aria-label="Move history and analysis">
-      <section class="panel-section">
-        <h2>Move History</h2>
-        <div id="moveList" class="move-list" aria-live="polite"></div>
-      </section>
-
-      <section class="panel-section">
-        <h2>Game Analysis</h2>
-        <div id="evaluation" class="evaluation">Even position</div>
-        <div id="bestMove" class="best-move" aria-live="polite"></div>
-      </section>
+      <div id="analysisPanel" class="hidden">
+        <section class="analysis-card">
+          <h2>Game Summary</h2>
+          <div id="analysisSummary" style="margin-bottom: 15px; font-size: 0.9rem;">Play a game and click Analyze to see the report.</div>
+          <button id="startAnalysisBtn" class="btn primary" style="width:100%" type="button">Analyze Game</button>
+        </section>
+        <section class="analysis-graph-card">
+          <canvas id="evalGraph"></canvas>
+        </section>
+        <section class="analysis-moves-card">
+          <h2>Move List</h2>
+          <div id="analysisMoveList" class="move-list"></div>
+        </section>
+        <section class="analysis-details-card">
+          <h2>Move Details</h2>
+          <div id="moveDetails" style="font-size: 0.9rem;">Select a move to see details.</div>
+        </section>
+      </div>
     </aside>
   </main>
 
@@ -114,6 +152,7 @@
       <p id="gameResultMessage"></p>
       <div class="modal-buttons">
         <button id="newGameModalBtn" class="btn primary" type="button">New Game</button>
+        <button id="analyzeModalBtn" class="btn" type="button">Analyze Game</button>
         <button id="closeModalBtn" class="btn" type="button">Close</button>
       </div>
     </div>
@@ -122,6 +161,15 @@
   <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
   <script src="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+  
+  <!-- Analysis Modules -->
+  <script src="analysis/openingBook.js"></script>
+  <script src="analysis/evaluator.js"></script>
+  <script src="analysis/engine.js"></script>
+  <script src="analysis/classifier.js"></script>
+  <script src="analysis/accuracy.js"></script>
+  <script src="analysis/graph.js"></script>
+
   <script src="script.js"></script>
 </body>
 </html>
