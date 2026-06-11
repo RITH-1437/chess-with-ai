@@ -11,10 +11,12 @@ class ModernChessGame {
     this.timerInterval = null;
     this.soundEnabled = true;
     this.gameStats = { wins: 0, losses: 0, draws: 0 };
-    this.aiEngine = "stockfish"; // Default AI engine
+    this.aiEngine = "master"; // Default AI engine
     this.engineThinking = false;
     this.gameEnded = false;
     this.lastMoveWasUser = true; // Start with user's turn
+    this.selectedSquare = null;
+    this.lastDropTime = 0;
 
     // Advanced AI Configuration
     this.engines = {
@@ -213,6 +215,16 @@ class ModernChessGame {
       this.setDifficulty(parseInt(e.target.value))
     );
     $("#closeModalBtn").on("click", () => this.hideGameOverModal());
+    
+    // Analysis event listeners
+    $("#tabGame").on("click", () => this.switchTab("game"));
+    $("#tabAnalysis").on("click", () => this.switchTab("analysis"));
+    $("#startAnalysisBtn").on("click", () => this.startAnalysis());
+    $("#analyzeModalBtn").on("click", () => {
+      this.hideGameOverModal();
+      this.switchTab("analysis");
+      this.startAnalysis();
+    });
 
     // AI Engine selector
     $("#aiEngineSelect").on("change", (e) => this.setAIEngine(e.target.value));
@@ -222,6 +234,126 @@ class ModernChessGame {
       const moveIndex = parseInt($(e.target).data("move-index"));
       this.goToMove(moveIndex);
     });
+    
+    $(document).on("click", ".analysis-move", (e) => {
+      const moveIndex = parseInt($(e.currentTarget).data("move-index"));
+      this.showAnalysisDetails(moveIndex);
+    });
+
+    // Click-to-move support
+    $("#board").on("click", ".square-55d63", (e) => {
+      const square = $(e.currentTarget).attr("data-square");
+      if (square) {
+        this.handleSquareClick(square);
+      }
+    });
+  }
+
+  switchTab(tab) {
+    if (tab === "game") {
+      $("#tabGame").addClass("active");
+      $("#tabAnalysis").removeClass("active");
+      $("#gamePanel").removeClass("hidden");
+      $("#analysisPanel").addClass("hidden");
+    } else {
+      $("#tabAnalysis").addClass("active");
+      $("#tabGame").removeClass("active");
+      $("#analysisPanel").removeClass("hidden");
+      $("#gamePanel").addClass("hidden");
+    }
+  }
+
+  async startAnalysis() {
+    if (this.moveHistory.length === 0) {
+      $("#analysisSummary").text("No moves to analyze yet.");
+      return;
+    }
+    
+    $("#startAnalysisBtn").text("Analyzing... Please wait");
+    $("#startAnalysisBtn").prop("disabled", true);
+    
+    try {
+      const engine = new AnalysisEngine();
+      const movesData = await engine.analyzeMoves(this.moveHistory, (current, total) => {
+        $("#startAnalysisBtn").text(`Analyzing... ${Math.round((current/total)*100)}%`);
+      });
+      
+      this.analysisData = movesData;
+      
+      // Render graph
+      AnalysisGraph.render('evalGraph', movesData);
+      
+      // Render move list
+      const moveList = $("#analysisMoveList");
+      moveList.empty();
+      
+      let blunders = 0;
+      let mistakes = 0;
+      let brilliants = 0;
+      
+      movesData.forEach((m, idx) => {
+        const classInfo = MoveClassifier.classify(m.player, m.scoreBefore, m.scoreAfter, m.notation, m.bestMoveBefore);
+        m.classInfo = classInfo;
+        
+        if (classInfo.classification.includes("Blunder")) blunders++;
+        if (classInfo.classification.includes("Mistake")) mistakes++;
+        if (classInfo.classification.includes("Brilliant")) brilliants++;
+        
+        const moveHtml = $(`
+          <div class="move-pair analysis-move" data-move-index="${idx}">
+             <span class="move-number">${m.player === 'w' ? m.moveNumber + '.' : '...'}</span>
+             <span class="move">${m.notation}</span>
+             <span class="move" style="font-size: 0.8rem">${classInfo.classification}</span>
+          </div>
+        `);
+        moveList.append(moveHtml);
+      });
+      
+      // Accuracy & Summary
+      const accuracy = AccuracyCalculator.calculate(movesData);
+      const opening = OpeningBook.detectOpening(this.moveHistory);
+      
+      let summaryHtml = `
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+          <div><strong>White Accuracy:</strong> ${accuracy.white}%</div>
+          <div><strong>Black Accuracy:</strong> ${accuracy.black}%</div>
+        </div>
+        <div style="margin-top: 10px;"><strong>Opening:</strong> ${opening.name} (${opening.eco})</div>
+        <div style="margin-top: 10px;">
+          <span style="color: var(--danger-color)">Blunders: ${blunders}</span> | 
+          <span style="color: var(--warning-color)">Mistakes: ${mistakes}</span> | 
+          <span style="color: var(--primary-color)">Brilliants: ${brilliants}</span>
+        </div>
+      `;
+      
+      $("#analysisSummary").html(summaryHtml);
+      $("#startAnalysisBtn").text("Re-Analyze Game");
+      
+    } catch (e) {
+      console.error(e);
+      $("#analysisSummary").text("Error during analysis.");
+      $("#startAnalysisBtn").text("Analyze Game");
+    } finally {
+      $("#startAnalysisBtn").prop("disabled", false);
+    }
+  }
+
+  showAnalysisDetails(index) {
+    if (!this.analysisData || !this.analysisData[index]) return;
+    
+    $(".analysis-move").removeClass("active");
+    $(`.analysis-move[data-move-index="${index}"]`).addClass("active");
+    
+    const m = this.analysisData[index];
+    this.goToMove(index); // Visual board update
+    
+    $("#moveDetails").html(`
+      <div style="margin-bottom: 8px;"><strong>${m.player === 'w' ? 'White' : 'Black'} played:</strong> ${m.notation}</div>
+      <div style="margin-bottom: 8px;"><strong>Classification:</strong> ${m.classInfo.classification}</div>
+      <div style="margin-bottom: 8px;"><strong>Evaluation:</strong> ${(m.scoreBefore).toFixed(2)} → ${(m.scoreAfter).toFixed(2)}</div>
+      <div style="margin-bottom: 8px;"><strong>Best Move:</strong> ${m.bestMoveBefore || 'N/A'}</div>
+      <div style="margin-top: 12px; font-style: italic;">${m.classInfo.explanation}</div>
+    `);
   }
 
   onDragStart(source, piece, position, orientation) {
@@ -253,10 +385,22 @@ class ModernChessGame {
     }
 
     console.log("✅ Drag allowed");
+    
+    // Show possible moves when dragging starts
+    this.selectedSquare = source;
+    this.showPossibleMoves(source);
+    
     return true;
   }
 
   onDrop(source, target) {
+    this.lastDropTime = Date.now();
+
+    // If dropped on the same square, snap back but let click handler deal with selection
+    if (source === target) {
+      return "snapback";
+    }
+
     // Attempt the move
     const move = this.game.move({
       from: source,
@@ -266,8 +410,13 @@ class ModernChessGame {
 
     // Illegal move
     if (move === null) {
+      this.clearPossibleMoves();
+      this.selectedSquare = null;
       return "snapback";
     }
+
+    this.clearPossibleMoves();
+    this.selectedSquare = null;
 
     // Mark that user just moved
     this.lastMoveWasUser = true;
@@ -332,14 +481,7 @@ class ModernChessGame {
       );
       return;
     }
-
-    // 🛑 PREVENT CONSECUTIVE AI MOVES
-    if (!this.lastMoveWasUser) {
-      console.error(
-        `🚨 BLOCKING CONSECUTIVE AI MOVE! Last move was not user move.`
-      );
-      return;
-    } // ✅ AI only moves as Black in human vs AI mode
+    // ✅ AI only moves as Black in human vs AI mode
     if (this.game.turn() !== "b") {
       console.log(
         `❌ WRONG TURN! Current: ${this.game.turn()}, Expected: 'b' - ABORTING AI MOVE`
@@ -393,6 +535,8 @@ class ModernChessGame {
 
         const move = this.game.move(bestMove);
         if (move) {
+          this.clearPossibleMoves();
+          this.selectedSquare = null;
           this.board.position(this.game.fen());
           this.playSound("move");
           this.addMoveToHistory(move);
@@ -401,9 +545,6 @@ class ModernChessGame {
           this.switchTimer();
 
           this.checkGameOver();
-
-          // Quick personality adaptation
-          this.quickAdaptPersonality(move);
 
           console.log(`✅ AI move complete: ${move.san} - Now user's turn`);
         }
@@ -411,22 +552,26 @@ class ModernChessGame {
     } catch (error) {
       console.error("🚫 AI Error:", error);
       // Fast emergency fallback
-      const emergencyMove = this.getQuickFallback();
-      if (emergencyMove) {
-        const move = this.game.move(emergencyMove);
-        if (move) {
-          console.log(`🆘 AI EMERGENCY MOVE: ${move.san}`);
-          this.board.position(this.game.fen());
-          this.playSound("move");
-          this.addMoveToHistory(move);
-          this.updateCapturedPieces();
-          this.updateStatus();
-          this.switchTimer();
-          console.log(
-            `   Turn after emergency move: ${this.game.turn()} (should be 'w' for user)`
-          );
-          this.checkGameOver();
-          console.log(`✅ Emergency move complete - Now user's turn`);
+      if (this.game.turn() === "b") {
+        const emergencyMove = this.getQuickFallback();
+        if (emergencyMove) {
+          const move = this.game.move(emergencyMove);
+          if (move) {
+            this.clearPossibleMoves();
+            this.selectedSquare = null;
+            console.log(`🆘 AI EMERGENCY MOVE: ${move.san}`);
+            this.board.position(this.game.fen());
+            this.playSound("move");
+            this.addMoveToHistory(move);
+            this.updateCapturedPieces();
+            this.updateStatus();
+            this.switchTimer();
+            console.log(
+              `   Turn after emergency move: ${this.game.turn()} (should be 'w' for user)`
+            );
+            this.checkGameOver();
+            console.log(`✅ Emergency move complete - Now user's turn`);
+          }
         }
       }
     } finally {
@@ -859,9 +1004,10 @@ class ModernChessGame {
     if (moves.length === 0) return null;
 
     let bestMove = null;
-    let bestScore = -Infinity;
-    const alpha = -Infinity;
-    const beta = Infinity;
+    const isMaximizingPlayer = this.game.turn() === "b";
+    let bestScore = isMaximizingPlayer ? -Infinity : Infinity;
+    let alpha = -Infinity;
+    let beta = Infinity;
 
     // Prioritize captures and checks
     const priorityMoves = moves.filter(
@@ -872,17 +1018,21 @@ class ModernChessGame {
 
     for (const move of orderedMoves) {
       this.game.move(move);
-      const score = this.minimaxEnhanced(depth - 1, alpha, beta, false);
+      const score = this.minimaxEnhanced(depth - 1, alpha, beta, !isMaximizingPlayer);
       this.game.undo();
 
-      if (score > bestScore) {
-        bestScore = score;
-        bestMove = move;
-      }
-
-      // Add some randomness to make play more interesting
-      if (Math.abs(score - bestScore) < 0.1 && Math.random() < 0.3) {
-        bestMove = move;
+      if (isMaximizingPlayer) {
+        if (score > bestScore) {
+          bestScore = score;
+          bestMove = move;
+        }
+        alpha = Math.max(alpha, score);
+      } else {
+        if (score < bestScore) {
+          bestScore = score;
+          bestMove = move;
+        }
+        beta = Math.min(beta, score);
       }
     }
 
@@ -923,7 +1073,7 @@ class ModernChessGame {
 
   evaluatePositionEnhanced() {
     if (this.game.in_checkmate()) {
-      return this.game.turn() === "b" ? 1000 : -1000;
+      return this.game.turn() === "b" ? -10000 : 10000;
     }
     if (this.game.in_draw()) return 0;
 
@@ -1337,16 +1487,28 @@ class ModernChessGame {
     }
 
     let bestMove = null;
-    let bestScore = -Infinity;
+    const isMaximizingPlayer = this.game.turn() === "b";
+    let bestScore = isMaximizingPlayer ? -Infinity : Infinity;
+    let alpha = -Infinity;
+    let beta = Infinity;
 
     for (const move of moves) {
       this.game.move(move);
-      const score = this.minimax(depth - 1, -Infinity, Infinity, false);
+      const score = this.minimax(depth - 1, alpha, beta, !isMaximizingPlayer);
       this.game.undo();
 
-      if (score > bestScore) {
-        bestScore = score;
-        bestMove = move;
+      if (isMaximizingPlayer) {
+        if (score > bestScore) {
+          bestScore = score;
+          bestMove = move;
+        }
+        alpha = Math.max(alpha, score);
+      } else {
+        if (score < bestScore) {
+          bestScore = score;
+          bestMove = move;
+        }
+        beta = Math.min(beta, score);
       }
     }
 
@@ -1387,7 +1549,7 @@ class ModernChessGame {
 
   evaluatePosition() {
     if (this.game.in_checkmate()) {
-      return this.game.turn() === "b" ? 1000 : -1000;
+      return this.game.turn() === "b" ? -10000 : 10000;
     }
     if (this.game.in_draw()) return 0;
 
@@ -1609,6 +1771,8 @@ class ModernChessGame {
   }
 
   checkGameOver() {
+    if (this.gameEnded) return true;
+
     if (this.game.game_over()) {
       clearInterval(this.timerInterval);
 
@@ -1659,14 +1823,6 @@ class ModernChessGame {
         this.activeTimer === "white" ? "You" : "AI"
       } ran out of time.`
     );
-
-    if (this.activeTimer === "white") {
-      this.gameStats.losses++;
-    } else {
-      this.gameStats.wins++;
-    }
-
-    this.saveGameStats();
     this.playSound("gameOver");
   }
 
@@ -1726,6 +1882,8 @@ class ModernChessGame {
   }
 
   newGame() {
+    if (this.engineThinking) return;
+
     this.game.reset();
     this.board.start();
     this.moveHistory = [];
@@ -1735,6 +1893,8 @@ class ModernChessGame {
     // Reset AI state
     this.engineThinking = false;
     this.lastMoveWasUser = true; // Reset to user's turn
+    this.selectedSquare = null;
+    this.clearPossibleMoves();
     $("#board").removeClass("thinking");
 
     clearInterval(this.timerInterval);
@@ -1751,17 +1911,27 @@ class ModernChessGame {
   }
 
   undoMove() {
-    if (this.moveHistory.length >= 2) {
-      // Undo last two moves (player and AI)
-      this.game.undo();
-      this.game.undo();
-      this.moveHistory.splice(-2);
+    if (this.engineThinking) return;
 
+    if (this.moveHistory.length > 0) {
+      this.game.undo();
+      this.moveHistory.pop();
+
+      if (this.game.turn() === "b" && this.moveHistory.length > 0) {
+        this.game.undo();
+        this.moveHistory.pop();
+      }
+
+      this.lastMoveWasUser = false;
+      this.selectedSquare = null;
+      this.clearPossibleMoves();
       this.board.position(this.game.fen());
       this.updateMoveHistoryDisplay();
       this.updateCapturedPieces();
       this.updateStatus();
       this.playSound("move");
+      this.gameEnded = false;
+      this.hideGameOverModal();
     }
   }
 
@@ -1814,6 +1984,8 @@ class ModernChessGame {
 
     // Set flag so AI move logic works
     this.lastMoveWasUser = true;
+    this.selectedSquare = null;
+    this.clearPossibleMoves();
     this.makeComputerMove();
   }
 
@@ -1873,6 +2045,8 @@ class ModernChessGame {
       }
     }
 
+    this.selectedSquare = null;
+    this.clearPossibleMoves();
     this.board.position(this.game.fen());
     this.updateStatus();
 
@@ -1915,6 +2089,90 @@ class ModernChessGame {
       );
     } catch (error) {
       console.error("❌ Could not update score display:", error);
+    }
+  }
+
+  // 🎯 LEGAL MOVE HIGHLIGHTING METHODS
+
+  clearPossibleMoves() {
+    $("#board .square-55d63").removeClass(
+      "selected-square possible-move capture-move"
+    );
+  }
+
+  showPossibleMoves(square) {
+    this.clearPossibleMoves();
+
+    // Get legal moves for this square using existing game engine
+    const moves = this.game.moves({
+      square: square,
+      verbose: true,
+    });
+
+    if (moves.length === 0) return;
+
+    // Highlight selected square
+    $(`#board .square-${square}`).addClass("selected-square");
+
+    // Highlight possible destination squares
+    for (const move of moves) {
+      const $square = $(`#board .square-${move.to}`);
+      if (move.captured) {
+        $square.addClass("capture-move");
+      } else {
+        $square.addClass("possible-move");
+      }
+    }
+  }
+
+  handleSquareClick(square) {
+    // Prevent click processing immediately after a drag-and-drop to avoid conflicts
+    if (Date.now() - this.lastDropTime < 100) return;
+
+    if (this.game.game_over() || this.engineThinking || this.game.turn() !== "w") {
+      return;
+    }
+
+    const piece = this.game.get(square);
+
+    if (this.selectedSquare) {
+      if (this.selectedSquare === square) {
+        this.clearPossibleMoves();
+        this.selectedSquare = null;
+        return;
+      }
+
+      // Check if clicked square is a valid move
+      const moves = this.game.moves({
+        square: this.selectedSquare,
+        verbose: true,
+      });
+      const move = moves.find((m) => m.to === square);
+
+      if (move) {
+        // Execute the click-to-move
+        this.onDrop(this.selectedSquare, square);
+        
+        // Update the board UI immediately with smooth animation enabled
+        this.board.position(this.game.fen(), true);
+        return;
+      }
+
+      // Clicked on another piece of same color? Select it instead
+      if (piece && piece.color === "w") {
+        this.selectedSquare = square;
+        this.showPossibleMoves(square);
+      } else {
+        // Clicked invalid empty square or enemy piece (not a valid move), clear selection
+        this.clearPossibleMoves();
+        this.selectedSquare = null;
+      }
+    } else {
+      // Nothing selected yet, select if it's a white piece
+      if (piece && piece.color === "w") {
+        this.selectedSquare = square;
+        this.showPossibleMoves(square);
+      }
     }
   }
 
@@ -2242,119 +2500,6 @@ class ModernChessGame {
 
   displayAnalysis(analysis, lastMove) {
     const evalText = `${analysis.evaluation} (Material: +${analysis.material.difference})`;
-    $("#evaluation").text(evalText);
-
-    // Show in console for now
-    console.log("📊 Position Analysis:");
-    console.log("  Material:", analysis.material);
-    console.log("  Threats:", analysis.threats);
-    console.log("  Evaluation:", analysis.evaluation);
-  }
-
-  displayMovePredictions(predictions) {
-    console.log("🎯 Predicted likely moves:");
-    predictions.forEach((pred, i) => {
-      console.log(
-        `  ${i + 1}. ${pred.move} (${pred.reason}) - ${(
-          pred.probability * 100
-        ).toFixed(1)}%`
-      );
-    });
-  }
-
-  calculateMaterialBalance() {
-    const board = this.game.board();
-    let white = 0,
-      black = 0;
-
-    board.flat().forEach((piece) => {
-      if (piece) {
-        const value = this.getPieceValue(piece.type);
-        if (piece.color === "w") white += value;
-        else black += value;
-      }
-    });
-
-    return { white, black, difference: white - black };
-  }
-
-  identifyCurrentThreats() {
-    const moves = this.game.moves({ verbose: true });
-    const threats = [];
-
-    moves.forEach((move) => {
-      if (move.captured) {
-        threats.push({
-          type: "capture",
-          piece: move.captured,
-          square: move.to,
-        });
-      }
-
-      // Check if move gives check
-      this.game.move(move);
-      if (this.game.in_check()) {
-        threats.push({ type: "check", square: move.to });
-      }
-      this.game.undo();
-    });
-
-    return threats;
-  }
-
-  findPositionalWeaknesses() {
-    // Simple weakness detection
-    return [
-      { type: "king_safety", severity: Math.random() > 0.5 ? "medium" : "low" },
-      { type: "pawn_structure", details: "isolated pawns detected" },
-    ];
-  }
-
-  findTacticalOpportunities() {
-    const opportunities = [];
-    const moves = this.game.moves({ verbose: true });
-
-    moves.forEach((move) => {
-      if (
-        move.captured &&
-        this.getPieceValue(move.captured) > this.getPieceValue(move.piece)
-      ) {
-        opportunities.push({ type: "favorable_trade", move: move.san });
-      }
-    });
-
-    return opportunities;
-  }
-
-  evaluateCurrentPosition() {
-    const material = this.calculateMaterialBalance();
-    let evaluation = material.difference;
-
-    // Add positional factors
-    evaluation += Math.random() * 100 - 50; // Simplified
-
-    if (evaluation > 100) return "White is winning";
-    if (evaluation > 50) return "White is better";
-    if (evaluation < -100) return "Black is winning";
-    if (evaluation < -50) return "Black is better";
-    return "Position is equal";
-  }
-
-  predictLikelyMoves() {
-    const moves = this.game.moves({ verbose: true });
-    const predictions = moves.slice(0, 3).map((move) => ({
-      move: move.san,
-      probability: Math.random(),
-      reason: move.captured ? "Capture" : "Development",
-    }));
-
-    return predictions.sort((a, b) => b.probability - a.probability);
-  }
-
-  displayAnalysis(analysis, lastMove) {
-    const evalText = `${analysis.evaluation} (Material: ${
-      analysis.material.difference > 0 ? "+" : ""
-    }${analysis.material.difference})`;
     $("#evaluation").text(evalText);
 
     // Show in console for now

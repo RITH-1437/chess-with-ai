@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chess With AI Browser Rule Harness</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 24px;
+      color: #f4f7fb;
+      background: #10131a;
+      font-family: "Segoe UI", system-ui, sans-serif;
+    }
+
+    h1 {
+      margin-top: 0;
+    }
+
+    .pass {
+      color: #45c4b0;
+    }
+
+    .fail {
+      color: #ff6b6b;
+    }
+
+    code {
+      color: #f5c15c;
+    }
+  </style>
+</head>
+<body>
+  <h1>Chess With AI Browser Rule Harness</h1>
+  <p>Open this file in a browser. It runs chess.js rule checks and local AI checks.</p>
+  <ol id="results"></ol>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+  <script src="../chess/script.js"></script>
+  <script>
+    "use strict";
+
+    const results = document.querySelector("#results");
+
+    function report(name, passed, detail = "") {
+      const item = document.createElement("li");
+      item.className = passed ? "pass" : "fail";
+      item.textContent = `${passed ? "PASS" : "FAIL"} ${name}${detail ? ` - ${detail}` : ""}`;
+      results.append(item);
+      if (!passed) {
+        throw new Error(`${name}: ${detail}`);
+      }
+    }
+
+    function assertMove(game, move, expectedSan, name) {
+      const played = game.move(move);
+      report(name, Boolean(played && played.san === expectedSan), played ? played.san : "illegal");
+    }
+
+    function legalMoveExists(game, from, to, name) {
+      const exists = game.moves({ verbose: true }).some((move) => move.from === from && move.to === to);
+      report(name, exists);
+    }
+
+    function illegalMove(game, move, name) {
+      report(name, game.move(move) === null);
+    }
+
+    const pawnGame = new Chess();
+    assertMove(pawnGame, { from: "e2", to: "e4" }, "e4", "pawn first double move");
+    assertMove(pawnGame, { from: "d7", to: "d5" }, "d5", "black pawn first double move");
+    assertMove(pawnGame, { from: "e4", to: "d5" }, "exd5", "pawn capture");
+
+    const enPassant = new Chess("8/8/8/3pP3/8/8/8/4K2k w - d6 0 1");
+    assertMove(enPassant, { from: "e5", to: "d6" }, "exd6", "en passant");
+
+    const promotion = new Chess("8/P7/8/8/8/8/8/4K2k w - - 0 1");
+    assertMove(promotion, { from: "a7", to: "a8", promotion: "q" }, "a8=Q+", "promotion");
+
+    const movement = new Chess();
+    legalMoveExists(movement, "g1", "f3", "knight movement");
+    illegalMove(movement, { from: "a1", to: "a4" }, "rook blocked move is illegal");
+    assertMove(movement, { from: "e2", to: "e4" }, "e4", "turn switching white move");
+    assertMove(movement, { from: "e7", to: "e5" }, "e5", "turn switching black move");
+    legalMoveExists(movement, "f1", "c4", "bishop movement");
+    legalMoveExists(movement, "d1", "h5", "queen movement");
+    legalMoveExists(movement, "e1", "e2", "king movement");
+
+    const castle = new Chess("r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1");
+    assertMove(castle, { from: "e1", to: "g1" }, "O-O", "castling");
+
+    const mate = new Chess();
+    mate.move("f3");
+    mate.move("e5");
+    mate.move("g4");
+    mate.move("Qh4#");
+    report("checkmate detection", mate.in_checkmate());
+
+    const stalemate = new Chess("7k/5Q2/6K1/8/8/8/8/8 b - - 0 1");
+    report("stalemate detection", stalemate.in_stalemate());
+
+    const aiGame = new Chess("6k1/5ppp/8/8/8/8/5PPP/6K1 b - - 0 1");
+    const ai = new window.ChessWithAI.ChessAI();
+    const aiMove = ai.getBestMove(aiGame, "medium");
+    report("AI move generation", Boolean(aiMove));
+    report("AI generated legal move", aiGame.moves({ verbose: true }).some((move) => move.from === aiMove.from && move.to === aiMove.to));
+
+    const resetGame = new Chess();
+    resetGame.move("e4");
+    resetGame.reset();
+    report("board reset state", resetGame.fen() === "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+  </script>
+</body>
+</html>
